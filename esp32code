@@ -1,0 +1,138 @@
+/**
+ * ESP32-C3 Telegram Bot Control for Arduino Nano Timer
+ */
+
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <UniversalTelegramBot.h>
+#include <ArduinoJson.h>
+
+const char* ssid = "SSID";
+const char* password = "PASSWORD";
+
+// Telegram BOT Token (from BotFather)
+#define BOT_TOKEN "BOTTOKEN"  // Replace with your actual bot token
+
+// Telegram Bot instance
+WiFiClientSecure client;
+UniversalTelegramBot bot(BOT_TOKEN, client);
+
+// Telegram update interval
+unsigned long lastUpdateTime = 0;
+const unsigned long telegramInterval = 500;  // Check for new messages every second
+
+void setup() {
+  // Initialize Serial communication to Arduino Nano at 9600 baud rate
+  Serial.begin(9600);
+
+  // Connect to Wi-Fi
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+  }
+
+  // Allow insecure connection (no certificate validation)
+  client.setInsecure();
+}
+
+void loop() {
+  unsigned long currentMillis = millis();
+
+  // Handle Telegram messages
+  if (currentMillis - lastUpdateTime >= telegramInterval) {
+    lastUpdateTime = currentMillis;
+    handleTelegramMessages();
+  }
+}
+
+// Handle Telegram messages
+void handleTelegramMessages() {
+  int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+
+  while (numNewMessages) {
+    for (int i = 0; i < numNewMessages; i++) {
+      String chat_id = bot.messages[i].chat_id;
+      String text = bot.messages[i].text;
+      text.trim();
+
+      // Handle commands
+      if (text.startsWith("/settimer")) {
+        // Format: /settimer minutes seconds
+        int firstSpace = text.indexOf(' ');
+        int secondSpace = text.indexOf(' ', firstSpace + 1);
+
+        if (firstSpace == -1 || secondSpace == -1) {
+          bot.sendMessage(chat_id, "⚠️ Usage: /settimer minutes seconds\nExample: /settimer 2 30", "");
+          continue;
+        }
+
+        String minutesStr = text.substring(firstSpace + 1, secondSpace);
+        String secondsStr = text.substring(secondSpace + 1);
+
+        int minutes = minutesStr.toInt();
+        int seconds = secondsStr.toInt();
+
+        if (minutes < 0 || seconds < 0 || seconds > 59) {
+          bot.sendMessage(chat_id, "⚠️ Invalid time. Please enter minutes (>=0) and seconds (0-59).", "");
+          continue;
+        }
+
+        // Send command to Arduino Nano
+        String command = "SET DURATION " + String(minutes) + ":" + String(seconds) + "\n";
+        Serial.print(command);
+
+        bot.sendMessage(chat_id, "⏱ Timer set to " + String(minutes) + " minutes and " + String(seconds) + " seconds.", "");
+      }
+      else if (text.equals("/starttimer")) {
+        Serial.println("START");
+        bot.sendMessage(chat_id, "▶️ Timer started.", "");
+      }
+      else if (text.equals("/stoptimer")) {
+        Serial.println("STOP");
+        bot.sendMessage(chat_id, "⏸ Timer stopped.", "");
+      }
+      else if (text.equals("/resettimer")) {
+        Serial.println("RESET");
+        bot.sendMessage(chat_id, "🔄 Timer reset to initial duration.", "");
+      }
+      else if (text.startsWith("/setbrightness")) {
+        // Format: /setbrightness level (0-7)
+        int spaceIndex = text.indexOf(' ');
+        if (spaceIndex == -1) {
+          bot.sendMessage(chat_id, "⚠️ Usage: /setbrightness level\nExample: /setbrightness 5", "");
+          continue;
+        }
+        String levelStr = text.substring(spaceIndex + 1);
+        int level = levelStr.toInt();
+
+        if (level < 0 || level > 7) {
+          bot.sendMessage(chat_id, "⚠️ Invalid brightness level. Enter a value between 0 (dim) and 7 (bright).", "");
+          continue;
+        }
+
+        // Send command to Arduino Nano
+        String command = "SET BRIGHTNESS " + String(level) + "\n";
+        Serial.print(command);
+
+        bot.sendMessage(chat_id, "💡 Brightness set to " + String(level) + ".", "");
+      }
+      else if (text.equals("/support")) {
+        Serial.println("SUPPORT");
+        bot.sendMessage(chat_id, "🆘 For technical support, please contact a.obaid.wsapp@gmail.com", "");
+      }
+      else {
+        // Unknown command
+        String helpMessage = "⏱️ *Available Commands:*\n";
+        helpMessage += "/settimer minutes seconds - Set the timer duration.\n";
+        helpMessage += "/starttimer - Start the timer.\n";
+        helpMessage += "/stoptimer - Stop the timer.\n";
+        helpMessage += "/resettimer - Reset the timer to initial duration.\n";
+        helpMessage += "/setbrightness level - Set display brightness (0-7).\n";
+        helpMessage += "/support - Get technical support contact.\n";
+        bot.sendMessage(chat_id, helpMessage, "Markdown");
+      }
+    }
+    numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+  }
+}
