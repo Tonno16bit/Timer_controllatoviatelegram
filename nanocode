@@ -1,0 +1,146 @@
+/**
+ * Arduino Nano Timer with TM1637 Display
+ * Receives commands from ESP32-C3 via Serial UART
+ */
+
+#include <TM1637Display.h>
+
+// TM1637 Display pins (CLK and DIO)
+#define CLK_PIN 2  // Adjust according to your wiring
+#define DIO_PIN 3  // Adjust according to your wiring
+TM1637Display display(CLK_PIN, DIO_PIN);
+
+// Timer variables
+volatile uint16_t timeRemainingSec = 0;  // Time remaining in seconds
+volatile bool timerRunning = false;      // Timer running flag
+uint16_t initialDurationSec = 0;         // Initial timer duration in seconds
+
+// Brightness level (0 to 7)
+uint8_t brightnessLevel = 7;             // Default maximum brightness
+
+// Last time marker for timer update
+unsigned long lastTimerUpdate = 0;
+
+// Function prototypes
+void handleCommand(String cmd);
+void updateTimer();
+void updateDisplay(uint16_t totalSeconds);
+uint8_t getCharSegment(char c);
+
+void setup() {
+  // Initialize Serial communication at 9600 baud rate
+  Serial.begin(9600);
+
+  // Initialize the display
+  display.setBrightness(brightnessLevel);
+  display.showNumberDecEx(0, 0b01000000, true, 4, 0); // Display 00:00
+}
+
+void loop() {
+  // Check for incoming serial commands
+  if (Serial.available()) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+    handleCommand(command);
+  }
+
+  // Update the timer every second if running
+  if (timerRunning && millis() - lastTimerUpdate >= 1000) {
+    lastTimerUpdate = millis();
+    updateTimer();
+  }
+}
+
+// Function to handle received commands
+void handleCommand(String cmd) {
+  if (cmd.startsWith("SET DURATION")) {
+    // Format: SET DURATION mm:ss
+    int colonIndex = cmd.indexOf(':');
+    if (colonIndex == -1) return; // Invalid format
+
+    String minutesStr = cmd.substring(13, colonIndex);
+    minutesStr.trim();
+    String secondsStr = cmd.substring(colonIndex + 1);
+    secondsStr.trim();
+
+    int minutes = minutesStr.toInt();
+    int seconds = secondsStr.toInt();
+    if (minutes < 0 || seconds < 0 || seconds > 59) return; // Invalid time
+
+    initialDurationSec = minutes * 60 + seconds;
+    timeRemainingSec = initialDurationSec;
+    timerRunning = false;
+    updateDisplay(timeRemainingSec);
+  }
+  else if (cmd == "START") {
+    if (timeRemainingSec > 0) {
+      timerRunning = true;
+    }
+  }
+  else if (cmd == "STOP") {
+    timerRunning = false;
+  }
+  else if (cmd == "RESET") {
+    timeRemainingSec = initialDurationSec;
+    timerRunning = false;
+    updateDisplay(timeRemainingSec);
+  }
+  else if (cmd.startsWith("SET BRIGHTNESS")) {
+    // Format: SET BRIGHTNESS level
+    String levelStr = cmd.substring(14);
+    levelStr.trim();
+    int level = levelStr.toInt();
+    if (level < 0 || level > 7) return; // Invalid brightness level
+
+    brightnessLevel = (uint8_t)level;
+    display.setBrightness(brightnessLevel);
+  }
+  else if (cmd == "SUPPORT") {
+    // Display 'SUPP' on the 7-segment display
+    uint8_t data[] = { 
+      getCharSegment('S'), 
+      getCharSegment('U'), 
+      getCharSegment('P'), 
+      getCharSegment('P') 
+    };
+    display.setSegments(data);
+  }
+}
+
+// Function to get segment pattern for a character
+uint8_t getCharSegment(char c) {
+  switch (c) {
+    case 'A': return 0b01110111;
+    case 'P': return 0b01110011;
+    case 'S': return 0b01101101;
+    case 'U': return 0b00111110;
+    default: return 0;
+  }
+}
+
+// Function to update the timer
+void updateTimer() {
+  if (timeRemainingSec > 0) {
+    timeRemainingSec--;
+    updateDisplay(timeRemainingSec);
+  } else {
+    timerRunning = false;
+    // Optional: Flash display or indicate timer completion
+    display.showNumberDecEx(0, 0b01000000, true, 4, 0); // Display 00:00
+  }
+}
+
+// Function to update the display
+void updateDisplay(uint16_t totalSeconds) {
+  uint8_t minutes = totalSeconds / 60;
+  uint8_t seconds = totalSeconds % 60;
+
+  uint8_t digits[] = {
+    display.encodeDigit(minutes / 10),
+    (uint8_t)(display.encodeDigit(minutes % 10) | 0x80), // Add colon
+    display.encodeDigit(seconds / 10),
+    display.encodeDigit(seconds % 10)
+  };
+
+  display.setSegments(digits);
+}
