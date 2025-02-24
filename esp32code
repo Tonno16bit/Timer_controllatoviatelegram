@@ -7,11 +7,11 @@
 #include <UniversalTelegramBot.h>
 #include <ArduinoJson.h>
 
-const char* ssid = "SSID";
-const char* password = "PASSWORD";
+const char* ssid = "2W-UT0xck";
+const char* password = "nqyKlZ1ymFaw";
 
 // Telegram BOT Token (from BotFather)
-#define BOT_TOKEN "BOTTOKEN"  // Replace with your actual bot token
+#define BOT_TOKEN "7535675738:AAFL9jCDN5cjJ3UT36wxtlYWaOdrVWlVncU"  // Replace with your actual bot token
 
 // Telegram Bot instance
 WiFiClientSecure client;
