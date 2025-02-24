@@ -16,7 +16,7 @@ volatile bool timerRunning = false;      // Timer running flag
 uint16_t initialDurationSec = 0;         // Initial timer duration in seconds
 
 // Brightness level (0 to 7)
-uint8_t brightnessLevel = 7;             // Default maximum brightness
+uint8_t brightnessLevel = 5;             // Default maximum brightness
 
 // Last time marker for timer update
 unsigned long lastTimerUpdate = 0;
